@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+.DS_Store
+.env
+# Don't ignore the yolov8n model
+!yolov8n.pt

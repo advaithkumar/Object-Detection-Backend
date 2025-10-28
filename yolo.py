@@ -4,8 +4,6 @@ from flask_cors import CORS
 from PIL import Image
 import io
 import base64
-import cv2
-import numpy as np
 import os
 
 app = Flask(__name__)
@@ -22,8 +20,16 @@ CORS(app, resources={
     }
 })
 
-# Load a pretrained YOLOv8 model
-model = YOLO('yolov8n.pt')
+# Lazy load model - don't load on startup
+model = None
+
+def get_model():
+    global model
+    if model is None:
+        # Use the model file deployed with the backend
+        model_path = os.path.join(os.path.dirname(__file__), 'yolov8n.pt')
+        model = YOLO(model_path)
+    return model
 
 @app.route('/detect', methods=['POST'])
 def detect_objects():
@@ -36,8 +42,8 @@ def detect_objects():
         image_bytes = base64.b64decode(image_data)
         image = Image.open(io.BytesIO(image_bytes))
         
-        # Run YOLO detection
-        results = model.predict(image)
+        # Run YOLO detection with lazy-loaded model
+        results = get_model().predict(image)
         
         # Extract detection data
         detections = []
@@ -80,53 +86,8 @@ def detect_objects():
 
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'ok'})
+    return jsonify({'status': 'ok', 'model_loaded': model is not None})
 
-@app.route('/detect-debug', methods=['POST'])
-def detect_objects_debug():
-    try:
-        # Get image from request
-        data = request.json
-        image_data = data['image'].split(',')[1]
-        
-        image_bytes = base64.b64decode(image_data)
-        image = Image.open(io.BytesIO(image_bytes))
-        
-        # Run YOLO detection with visualization
-        results = model.predict(image)
-        
-        # Extract detection data
-        detections = []
-        for r in results:
-            for box in r.boxes:
-                class_name = r.names[int(box.cls[0])]
-                confidence = float(box.conf[0])
-                bbox = box.xyxy[0].tolist()
-                
-                detections.append({
-                    'class': class_name,
-                    'confidence': confidence,
-                    'bbox': bbox
-                })
-        
-        # Get annotated image
-        annotated_image = results[0].plot()
-        
-        # Convert to base64
-        _, buffer = cv2.imencode('.png', annotated_image)
-        annotated_base64 = base64.b64encode(buffer).decode('utf-8')
-        
-        return jsonify({
-            'success': True,
-            'detections': detections,
-            'annotated_image': f'data:image/png;base64,{annotated_base64}'
-        })
-    
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
