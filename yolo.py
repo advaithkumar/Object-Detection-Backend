@@ -22,8 +22,14 @@ CORS(app, resources={
     }
 })
 
-# Load a pretrained YOLOv8 model
-model = YOLO('yolov8n.pt')
+# Lazy load YOLO model
+model = None
+
+def get_model():
+    global model
+    if model is None:
+        model = YOLO('yolov8n.pt')
+    return model
 
 @app.route('/detect', methods=['POST'])
 def detect_objects():
@@ -37,7 +43,7 @@ def detect_objects():
         image = Image.open(io.BytesIO(image_bytes))
         
         # Run YOLO detection
-        results = model.predict(image)
+        results = get_model().predict(image)
         
         # Extract detection data
         detections = []
@@ -93,7 +99,7 @@ def detect_objects_debug():
         image = Image.open(io.BytesIO(image_bytes))
         
         # Run YOLO detection with visualization
-        results = model.predict(image)
+        results = get_model().predict(image)
         
         # Extract detection data
         detections = []
